@@ -129,7 +129,7 @@ async function main() {
     core.setOutput('latest_release_tag', latest.name);
     core.setOutput('latest_release_version', stableVersion);
     const rawCommits = await (0, utils_1.getCommits)(previous.commit.sha, commitRef);
-    const commits = await (0, utils_1.filterCommits)(rawCommits, csv('path_filter'), csv('scopes'), csv('ignore_keywords'), bool('parse_squash_commits'));
+    const commits = await (0, utils_1.filterCommits)(rawCommits, (0, utils_1.parsePathFilter)(core.getInput('path_filter'), bool('path_filter_glob_syntax')), csv('scopes'), csv('ignore_keywords'), bool('parse_squash_commits'));
     const rules = (0, utils_1.mapCustomReleaseRules)(core.getInput('custom_release_rules'));
     const config = await (0, commits_1.commitConfig)(rules);
     let version = core.getInput('custom_tag');
@@ -726,6 +726,8 @@ exports.mapCustomReleaseRules = mapCustomReleaseRules;
 exports.mergeWithDefaultChangelogRules = mergeWithDefaultChangelogRules;
 exports.matchesBranch = matchesBranch;
 exports.escapeRegExp = escapeRegExp;
+exports.parsePathFilter = parsePathFilter;
+exports.matchesPathFilter = matchesPathFilter;
 exports.filterCommits = filterCommits;
 const core = __importStar(__nccwpck_require__(7484));
 const semver_1 = __nccwpck_require__(2088);
@@ -733,6 +735,7 @@ const semver_1 = __nccwpck_require__(2088);
 const default_release_types_1 = __importDefault(__nccwpck_require__(3876));
 const github_1 = __nccwpck_require__(6681);
 const minimatch_1 = __nccwpck_require__(6507);
+const micromatch_1 = __importDefault(__nccwpck_require__(8785));
 const defaults_1 = __nccwpck_require__(4168);
 async function getValidTags(prefixRegex, shouldFetchAllTags, tagSearchPattern = '', strictPrefix = false) {
     const tags = (await (0, github_1.listTags)(shouldFetchAllTags)).filter((tag) => (!tagSearchPattern || (0, minimatch_1.minimatch)(tag.name, tagSearchPattern)) &&
@@ -823,6 +826,52 @@ function matchesBranch(branch, patterns) {
 function escapeRegExp(value) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+// path_filter tokenization: newline-separated input is split one pattern
+// per line. A single-line input with no newline is split on commas instead,
+// for backward compatibility. forceGlobSyntax always takes the
+// newline/ordered path, even for single-line input - needed when a
+// single-line value legitimately contains a literal comma as part of a
+// glob, e.g. `src/{a,b}/**`, which would otherwise be split into invalid
+// fragments. See matchesPathFilter for how the resulting patterns are
+// evaluated.
+function parsePathFilter(raw, forceGlobSyntax = false) {
+    if (!raw)
+        return [];
+    if (forceGlobSyntax || raw.includes('\n'))
+        return raw
+            .split('\n')
+            .map((value) => value.trim())
+            .filter(Boolean);
+    return raw
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+}
+function normalizePattern(pattern) {
+    const isNegated = pattern.startsWith('!');
+    const raw = isNegated ? pattern.slice(1) : pattern;
+    const stripped = raw.replace(/[\\/]+$/, '');
+    if (!stripped)
+        return pattern;
+    const scan = micromatch_1.default.scan(raw);
+    if (!scan.isGlob) {
+        return isNegated ? `!${stripped}{,/**}` : `${stripped}{,/**}`;
+    }
+    return pattern;
+}
+// Evaluates an ordered pattern list via micromatch: later patterns override
+// earlier ones for files they match, and a leading `!` excludes rather than
+// matches. An all-negation list has an implicit include-all baseline; any
+// positive pattern present anywhere in the list flips the baseline to
+// exclude-all. Non-glob paths are treated as an exact and parent match glob
+// (i.e. `packages/web` is treated as `packages/web{,/**}`) to preserve
+// legacy path_filter convenience.
+function matchesPathFilter(file, patterns) {
+    if (!patterns.length)
+        return true;
+    const list = Array.isArray(file) ? file : [file];
+    return ((0, micromatch_1.default)(list, patterns.map(normalizePattern), { dot: true }).length > 0);
+}
 async function filterCommits(commits, paths, scopes, ignore, squash) {
     const result = [];
     for (const commit of commits) {
@@ -832,9 +881,7 @@ async function filterCommits(commits, paths, scopes, ignore, squash) {
             if (!commit.hash)
                 throw new Error('Path filtering requires a commit SHA.');
             const files = await (0, github_1.getCommitFiles)(commit.hash);
-            if (!files.some((file) => paths.some((path) => file === path.replace(/\/$/, '') ||
-                file.startsWith(`${path.replace(/\/$/, '')}/`) ||
-                (0, minimatch_1.minimatch)(file, path, { dot: true }))))
+            if (!matchesPathFilter(files, paths))
                 continue;
         }
         // Opt-in: GitHub squash bodies may contain conventional subjects as bullets.
