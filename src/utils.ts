@@ -8,7 +8,6 @@ import {
   getCommitFiles,
   listTags,
 } from './github';
-import { minimatch } from 'minimatch';
 import micromatch from 'micromatch';
 import { defaultChangelogRules } from './defaults';
 import { Await } from './ts';
@@ -23,7 +22,7 @@ export async function getValidTags(
 ) {
   const tags = (await listTags(shouldFetchAllTags)).filter(
     (tag) =>
-      (!tagSearchPattern || minimatch(tag.name, tagSearchPattern)) &&
+      (!tagSearchPattern || micromatch.isMatch(tag.name, tagSearchPattern)) &&
       (!strictPrefix || !tag.name.replace(prefixRegex, '').startsWith('v'))
   );
 
@@ -250,7 +249,8 @@ export async function filterCommits(
       const scope = message.match(/^[^\n]+?\(([^)]+)\)!?: /)?.[1];
       if (
         scopes.length &&
-        (!scope || !scopes.some((pattern) => minimatch(scope, pattern)))
+        (!scope ||
+          !scopes.some((pattern) => micromatch.isMatch(scope, pattern)))
       )
         continue;
       result.push({ ...commit, message });

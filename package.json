@@ -33,7 +33,6 @@
     "conventional-changelog-angular": "^5.0.13",
     "conventional-changelog-conventionalcommits": "^4.6.1",
     "micromatch": "^4.0.8",
-    "minimatch": "^10.2.4",
     "semver": "^7.3.5",
     "undici": "^7.24.0"
   },
