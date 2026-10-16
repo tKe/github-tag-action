@@ -1,3 +1,13 @@
+# v7.1.0
+
+Fork release on top of upstream v7.0.0 (`af99e60`), carrying changes proposed upstream in mathieudutour/github-tag-action#253 and #255 until they are merged. Drop-in compatible with v7.0.0 unless noted.
+
+- `path_filter` accepts a newline-separated, ordered pattern list: a leading `!` excludes files matched by earlier patterns, and brace expansion is supported. Single-line values are still split on commas; set `path_filter_glob_syntax: true` to always use the ordered form. Non-glob paths match the path and everything under it.
+- `scopes` and `tag_search_pattern` glob matching now uses `micromatch` instead of `minimatch`, with the same behavior.
+- `parse_squash_commits` accepts `off` (default), `fallback` (use squash bullets only when the header doesn't match the preset's header pattern) and `full` (analyze the header and every bullet). `false` means `off` and `true` means `full`, which keeps the v7.0.0 behavior.
+- Fix analyzer log lines such as `Analyzing commit: %s` being printed without formatting (mathieudutour/github-tag-action#254).
+- Tests no longer depend on `GITHUB_EVENT_NAME` being unset.
+
 # v7.0.0
 
 v7 upgrades the action to Node 24 and introduces breaking changes to version calculation and branch handling. Review the migration guide before upgrading from v6.
