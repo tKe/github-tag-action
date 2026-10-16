@@ -15,6 +15,7 @@ import {
   matchesBranch,
   escapeRegExp,
   filterCommits,
+  parsePathFilter,
 } from './utils';
 import {
   createTag,
@@ -131,7 +132,10 @@ export default async function main() {
   const config = await commitConfig(rules);
   const commits = await filterCommits(
     rawCommits,
-    csv('path_filter'),
+    parsePathFilter(
+      core.getInput('path_filter'),
+      bool('path_filter_glob_syntax')
+    ),
     csv('scopes'),
     csv('ignore_keywords'),
     parseSquashMode(core.getInput('parse_squash_commits')),
